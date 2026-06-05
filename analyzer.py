@@ -91,7 +91,7 @@ def _clean_years(value):
 def extract_resume_profile(resume_text: str) -> dict:
     """Turn plain resume text into a compact structured profile dict."""
     user = f"RESUME TEXT:\n\n{resume_text}"
-    return ask_json(RESUME_PROFILE_PROMPT, user, max_tokens=5000)
+    return ask_json(RESUME_PROFILE_PROMPT, user, max_tokens=10000)
 
 
 def expand_queries(profile: dict, preferences: dict) -> list[str]:
@@ -163,9 +163,9 @@ def _compact_for_ranking(job: dict) -> dict:
         "location": job.get("location", ""),
         "level": job.get("level", ""),
         "employment_type": job.get("employment_type", ""),
-        "skills": (job.get("skills") or [])[:12],
+        "skills": (job.get("skills") or [])[:25],
         "category": job.get("category", ""),
-        "snippet": (job.get("description") or "")[:500],
+        "snippet": (job.get("description") or "")[:1000],
     }
 
 
@@ -201,7 +201,7 @@ def rank_jobs(profile: dict, preferences: dict, jobs: list[dict]) -> list[dict]:
         enriched = dict(job)
         enriched["fit_score"] = int(entry.get("fit_score", 0) or 0)
         enriched["why_match"] = entry.get("why_match", "")
-        enriched["summary"] = (job.get("description") or "")[:160]
+        enriched["summary"] = (job.get("description") or "")[:250]
         model_level = _clean_level(entry.get("level", ""))
         if model_level:
             enriched["level"] = model_level
@@ -244,6 +244,8 @@ def _compact_for_chat(job: dict) -> dict:
         "location": job.get("location", ""),
         "level": job.get("level", ""),
         "fit_score": job.get("fit_score", 0),
+        "skills": (job.get("skills") or [])[:25],
+        "snippet": (job.get("description") or "")[:1000],
     }
 
 
@@ -256,7 +258,7 @@ def answer_followup(profile: dict, jobs: list[dict], question: str) -> dict:
     the answer text.
     """
     brief_profile = {
-        "skills": (profile.get("skills") or [])[:20],
+        "skills": (profile.get("skills") or [])[:25],
         "recent_titles": profile.get("recent_titles", []),
         "total_years_experience": profile.get("total_years_experience", ""),
     }
@@ -266,7 +268,7 @@ def answer_followup(profile: dict, jobs: list[dict], question: str) -> dict:
         f"CURRENT JOBS:\n{json.dumps(compact, indent=2)}\n\n"
         f"USER QUESTION:\n{question}"
     )
-    result = ask_json(CHAT_FOLLOWUP_PROMPT, user, temperature=0.2, max_tokens=20000)
+    result = ask_json(CHAT_FOLLOWUP_PROMPT, user, temperature=0.2, max_tokens=30000)
     if not isinstance(result, dict):
         return {"answer": "Sorry, I could not process that.", "job_ids": None}
 
