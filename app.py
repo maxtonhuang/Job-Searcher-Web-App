@@ -206,6 +206,7 @@ with st.sidebar:
         if resume_file is None:
             st.error("Please upload a PDF resume.")
             st.stop()
+        resume_text: str = ""
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / resume_file.name
@@ -226,6 +227,7 @@ with st.sidebar:
             "location": location,
         }
 
+        result: dict = {}
         with st.status("Working...", expanded=True) as status:
             try:
                 result = _cached_run_search(
