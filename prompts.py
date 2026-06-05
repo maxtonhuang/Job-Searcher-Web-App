@@ -232,3 +232,86 @@ The queries will be sent to job-board search boxes, one at a time.
 Output ONLY a valid JSON object matching the schema above. No prose. No markdown
 fences. No commentary.
 """
+
+
+# ---------------------------------------------------------------------------
+# Follow-up router (classifies a chat question; does NOT see the jobs)
+# ---------------------------------------------------------------------------
+
+FOLLOWUP_ROUTER_PROMPT = """
+# [Instruction]
+You are the router for a job-search assistant. Read the user's QUESTION about a
+list of jobs already on screen and decide how it should be handled. You do NOT see
+the jobs; only classify the question and extract parameters.
+
+# [Context]
+Downstream code handles the question one of three ways:
+- "keyword": a literal presence or absence filter on a concrete, named skill, tool,
+  technology, or word that appears verbatim in a job's text (e.g. Python, SQL, AWS,
+  Excel, Java). Exact matching, no judgement.
+- "semantic": a filter that needs judgement because the wording varies or must be
+  inferred (e.g. seniority suitability, "requires a degree", "involves managing
+  people", "remote friendly"). Phrased as a yes/no property.
+- "other": anything else, including re-ordering ("sort by", "most relevant to"),
+  informational questions ("why is the first ranked higher"), or anything unclear.
+
+# [Constraints]
+- Choose "keyword" ONLY for concrete named skills, tools, or technologies matched
+  literally. If the requirement involves qualifications, seniority, soft skills,
+  synonyms, or any inference, choose "semantic".
+- "polarity" is "include" to KEEP jobs that have the property, or "exclude" to KEEP
+  jobs that do NOT have it. "do not require X", "without X", "no X" map to
+  "exclude". "require X", "needs X", "only X" map to "include".
+- For "keyword": set "terms" to the literal token(s) as they appear in text,
+  lowercased; set "match" to "all" if every term must be present, else "any".
+- For "semantic": set "predicate" to a single yes/no property to test on each job,
+  phrased so that TRUE means the job HAS the property (e.g. "the role requires a
+  university degree"). Leave "terms" empty.
+- For "other": set mode "other" and leave "terms" and "predicate" empty.
+- "answer" is a short, plain confirmation of what you are doing (1 sentence).
+
+# [Output Schema]
+{
+  "mode": "keyword",
+  "polarity": "exclude",
+  "terms": ["string"],
+  "match": "any",
+  "predicate": "",
+  "answer": "string"
+}
+
+Output ONLY a valid JSON object matching the schema above. No prose. No markdown
+fences. No commentary.
+"""
+
+
+# ---------------------------------------------------------------------------
+# Semantic map (yes/no verdict per job over a small batch)
+# ---------------------------------------------------------------------------
+
+SEMANTIC_MAP_PROMPT = """
+# [Instruction]
+You evaluate a single yes/no PROPERTY against each job in a small JOBS batch, using
+only the text provided for each job. Return a verdict per job.
+
+# [Context]
+The user message contains a PROPERTY (a yes/no question about a job) and JOBS, a
+small list where each job has an "id", title, "skills", and a "snippet" of its
+description.
+
+# [Constraints]
+- Judge each job ONLY from its title, skills, and snippet. Do not invent facts.
+- "verdict" is true if the PROPERTY clearly holds for the job, false otherwise.
+  When the text is silent or genuinely unclear, return false.
+- Return EVERY job from the batch exactly once, each with its original "id".
+
+# [Output Schema]
+{
+  "results": [
+    { "id": "string", "verdict": true }
+  ]
+}
+
+Output ONLY a valid JSON object matching the schema above. No prose. No markdown
+fences. No commentary.
+"""

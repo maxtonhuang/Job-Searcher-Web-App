@@ -8,6 +8,7 @@ here (those are in sources.py).
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from llm import ask_json
 from prompts import (
@@ -15,6 +16,8 @@ from prompts import (
     JOB_MATCH_PROMPT,
     CHAT_FOLLOWUP_PROMPT,
     QUERY_EXPANSION_PROMPT,
+    FOLLOWUP_ROUTER_PROMPT,
+    SEMANTIC_MAP_PROMPT,
 )
 
 
@@ -276,3 +279,180 @@ def answer_followup(profile: dict, jobs: list[dict], question: str) -> dict:
     if not isinstance(job_ids, list):
         job_ids = None
     return {"answer": result.get("answer", ""), "job_ids": job_ids}
+
+
+# ---------------------------------------------------------------------------
+# Hybrid follow-up: route, then keyword filter / semantic map / general handler
+# ---------------------------------------------------------------------------
+
+_SEMANTIC_BATCH_SIZE = 12
+_SEMANTIC_MAX_WORKERS = 6
+
+# In-process cache of semantic verdicts, keyed by (predicate, job id, content hash).
+# The content hash means a reused id with different text never returns a stale
+# verdict. Scope is the running process, so repeated questions in a session are free.
+_semantic_cache: dict = {}
+
+
+def _job_haystack(job: dict) -> str:
+    """Lowercased title + skills + full description, for literal term matching."""
+    parts = [
+        job.get("title", ""),
+        " ".join(job.get("skills") or []),
+        job.get("description", "") or "",
+    ]
+    return " ".join(parts).lower()
+
+
+def _term_present(haystack: str, term: str) -> bool:
+    """
+    True if term appears in haystack as a whole token (case-insensitive). Token
+    boundaries are transitions between alphanumeric and non-alphanumeric, so "java"
+    does not match inside "javascript" and "c++" is matched literally.
+    """
+    t = (term or "").strip().lower()
+    if not t:
+        return False
+    pattern = r"(?<![a-z0-9])" + re.escape(t) + r"(?![a-z0-9])"
+    return re.search(pattern, haystack) is not None
+
+
+def keyword_filter_jobs(jobs: list[dict], terms, polarity: str,
+                        match: str = "any") -> list[str]:
+    """
+    Deterministic literal filter. Returns the ids to KEEP.
+
+    polarity "exclude" keeps jobs where NONE of the terms appear; "include" keeps
+    jobs where any (match "any") or all (match "all") of the terms appear.
+    """
+    terms = [t for t in (terms or []) if isinstance(t, str) and t.strip()]
+    if not terms:
+        return [j.get("id", "") for j in jobs]
+    kept: list[str] = []
+    for job in jobs:
+        hay = _job_haystack(job)
+        present = [t for t in terms if _term_present(hay, t)]
+        if polarity == "exclude":
+            keep = len(present) == 0
+        elif match == "all":
+            keep = len(present) == len(terms)
+        else:
+            keep = len(present) > 0
+        if keep:
+            kept.append(job.get("id", ""))
+    return kept
+
+
+def _semantic_compact(job: dict) -> dict:
+    return {
+        "id": job.get("id", ""),
+        "title": job.get("title", ""),
+        "skills": (job.get("skills") or [])[:25],
+        "snippet": (job.get("description") or "")[:1000],
+    }
+
+
+def _evaluate_batch(predicate: str, batch: list[dict]) -> dict:
+    """Return {id: bool} for one small batch. Any failure or omission is False."""
+    user = (
+        f"PROPERTY:\n{predicate}\n\n"
+        f"JOBS:\n{json.dumps([_semantic_compact(j) for j in batch], indent=2)}"
+    )
+    try:
+        result = ask_json(SEMANTIC_MAP_PROMPT, user, temperature=0.0, max_tokens=10000)
+    except Exception:
+        return {j.get("id", ""): False for j in batch}
+    verdicts: dict = {}
+    raw = result.get("results", []) if isinstance(result, dict) else []
+    for entry in raw:
+        if isinstance(entry, dict) and "id" in entry:
+            verdicts[str(entry["id"])] = bool(entry.get("verdict"))
+    for j in batch:
+        verdicts.setdefault(j.get("id", ""), False)
+    return verdicts
+
+
+def semantic_filter_jobs(jobs: list[dict], predicate: str,
+                         polarity: str) -> list[str]:
+    """
+    Judgement filter for fuzzy properties. Evaluates the predicate per job in small
+    parallel batches (cached), then returns the ids to KEEP. polarity "include"
+    keeps jobs where the predicate is true; "exclude" keeps jobs where it is false
+    (which includes jobs whose text is silent on the property).
+    """
+    predicate = (predicate or "").strip()
+    if not predicate:
+        return [j.get("id", "") for j in jobs]
+
+    verdicts: dict = {}
+    todo: list[dict] = []
+    for job in jobs:
+        key = (predicate, job.get("id", ""), hash(_job_haystack(job)))
+        if key in _semantic_cache:
+            verdicts[job.get("id", "")] = _semantic_cache[key]
+        else:
+            todo.append(job)
+
+    batches = [todo[i:i + _SEMANTIC_BATCH_SIZE]
+               for i in range(0, len(todo), _SEMANTIC_BATCH_SIZE)]
+    if batches:
+        with ThreadPoolExecutor(max_workers=_SEMANTIC_MAX_WORKERS) as pool:
+            results = pool.map(lambda b: _evaluate_batch(predicate, b), batches)
+            for batch, result in zip(batches, results):
+                for job in batch:
+                    jid = job.get("id", "")
+                    v = result.get(jid, False)
+                    verdicts[jid] = v
+                    _semantic_cache[(predicate, jid, hash(_job_haystack(job)))] = v
+
+    kept: list[str] = []
+    for job in jobs:
+        jid = job.get("id", "")
+        v = verdicts.get(jid, False)
+        keep = (not v) if polarity == "exclude" else v
+        if keep:
+            kept.append(jid)
+    return kept
+
+
+def _filter_summary(kept: int, total: int) -> str:
+    return f"Showing {kept} of {total} matching jobs."
+
+
+def handle_followup(profile: dict, jobs: list[dict], question: str) -> dict:
+    """
+    Entry point for the chat box. Routes the question with one cheap LLM call, then
+    handles it with the most reliable method available:
+      - "keyword": deterministic literal filter (no further LLM calls),
+      - "semantic": batched, parallel, cached per-job judgement,
+      - "other": the existing single-pass handler (re-order or informational).
+    Returns {"answer": str, "job_ids": list[str] | None}.
+    """
+    plan = route_followup(question)
+    mode = plan.get("mode", "other")
+    polarity = plan.get("polarity", "include") or "include"
+    answer = plan.get("answer", "") or ""
+
+    if mode == "keyword":
+        ids = keyword_filter_jobs(
+            jobs, plan.get("terms", []), polarity, plan.get("match", "any") or "any"
+        )
+        return {"answer": answer or _filter_summary(len(ids), len(jobs)),
+                "job_ids": ids}
+
+    if mode == "semantic":
+        ids = semantic_filter_jobs(jobs, plan.get("predicate", ""), polarity)
+        return {"answer": answer or _filter_summary(len(ids), len(jobs)),
+                "job_ids": ids}
+
+    return answer_followup(profile, jobs, question)
+
+
+def route_followup(question: str) -> dict:
+    """Classify a chat question into a handling plan. Cheap: it never sees the jobs."""
+    user = f"USER QUESTION:\n{question}"
+    try:
+        result = ask_json(FOLLOWUP_ROUTER_PROMPT, user, temperature=0.0, max_tokens=5000)
+    except Exception:
+        return {"mode": "other", "answer": ""}
+    return result if isinstance(result, dict) else {"mode": "other", "answer": ""}

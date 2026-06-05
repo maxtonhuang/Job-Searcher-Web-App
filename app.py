@@ -12,7 +12,7 @@ import streamlit as st
 
 from main import run_search
 from sources import ALL_SOURCES, SOURCE_MCF, fetch_mcf_detail
-from analyzer import answer_followup, LEVELS
+from analyzer import handle_followup, LEVELS
 from parse import read_resume_pdf
 
 PAGE_SIZE = 50
@@ -357,7 +357,7 @@ question = st.chat_input("Refine or ask about these jobs")
 if question:
     st.session_state.chat_history.append(("user", question))
     with st.spinner("Thinking..."):
-        reply = answer_followup(result["profile"], view_jobs, question)
+        reply = handle_followup(result["profile"], view_jobs, question)
     st.session_state.chat_history.append(("assistant", reply["answer"]))
 
     if reply["job_ids"]:
