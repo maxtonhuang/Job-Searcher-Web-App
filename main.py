@@ -23,7 +23,7 @@ from sources import (
 
 # How many jobs to pull per source. The pool is ranked once; the UI pages
 # through the ranked pool 10 at a time at no extra cost.
-DEFAULT_LIMIT_PER_SOURCE = 25
+DEFAULT_LIMIT_PER_SOURCE = 50
 
 # With several queries per source we fetch fewer per query, then dedupe and cap.
 PER_QUERY_LIMIT = 12
@@ -81,7 +81,7 @@ def run_search(
     if SOURCE_JOOBLE in sources:
         for q in queries:
             jooble_jobs += fetch_jooble(q, num_results=PER_QUERY_LIMIT)
-        jooble_jobs = dedupe_jobs(jooble_jobs)[:limit_per_source]
+        jooble_jobs = dedupe_jobs(jooble_jobs)[:limit_per_source//2]
 
     jobs = dedupe_jobs(mcf_jobs + adzuna_jobs + jsearch_jobs + jooble_jobs)
 
