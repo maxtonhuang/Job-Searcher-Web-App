@@ -91,7 +91,7 @@ def _clean_years(value):
 def extract_resume_profile(resume_text: str) -> dict:
     """Turn plain resume text into a compact structured profile dict."""
     user = f"RESUME TEXT:\n\n{resume_text}"
-    return ask_json(RESUME_PROFILE_PROMPT, user, max_tokens=30000)
+    return ask_json(RESUME_PROFILE_PROMPT, user, max_tokens=5000)
 
 
 def expand_queries(profile: dict, preferences: dict) -> list[str]:
@@ -112,7 +112,7 @@ def expand_queries(profile: dict, preferences: dict) -> list[str]:
         "target_roles": seed_roles,
     }
     user = f"PROFILE:\n{json.dumps(payload, indent=2)}"
-    result = ask_json(QUERY_EXPANSION_PROMPT, user, temperature=0.3, max_tokens=900)
+    result = ask_json(QUERY_EXPANSION_PROMPT, user, temperature=0.3, max_tokens=10000)
     raw = result.get("queries", []) if isinstance(result, dict) else []
 
     cleaned: list[str] = []
@@ -185,7 +185,7 @@ def rank_jobs(profile: dict, preferences: dict, jobs: list[dict]) -> list[dict]:
         f"PREFERENCES:\n{json.dumps(preferences, indent=2)}\n\n"
         f"JOBS:\n{json.dumps(compact, indent=2)}"
     )
-    result = ask_json(JOB_MATCH_PROMPT, user, temperature=0.2, max_tokens=8000)
+    result = ask_json(JOB_MATCH_PROMPT, user, temperature=0.2, max_tokens=30000)
     ranked_meta = result.get("ranked", []) if isinstance(result, dict) else []
 
     by_id = {j.get("id", ""): j for j in jobs}
@@ -266,7 +266,7 @@ def answer_followup(profile: dict, jobs: list[dict], question: str) -> dict:
         f"CURRENT JOBS:\n{json.dumps(compact, indent=2)}\n\n"
         f"USER QUESTION:\n{question}"
     )
-    result = ask_json(CHAT_FOLLOWUP_PROMPT, user, temperature=0.2, max_tokens=1500)
+    result = ask_json(CHAT_FOLLOWUP_PROMPT, user, temperature=0.2, max_tokens=5000)
     if not isinstance(result, dict):
         return {"answer": "Sorry, I could not process that.", "job_ids": None}
 
