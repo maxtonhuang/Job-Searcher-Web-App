@@ -112,7 +112,7 @@ def expand_queries(profile: dict, preferences: dict) -> list[str]:
         "target_roles": seed_roles,
     }
     user = f"PROFILE:\n{json.dumps(payload, indent=2)}"
-    result = ask_json(QUERY_EXPANSION_PROMPT, user, temperature=0.3, max_tokens=600)
+    result = ask_json(QUERY_EXPANSION_PROMPT, user, temperature=0.3, max_tokens=900)
     raw = result.get("queries", []) if isinstance(result, dict) else []
 
     cleaned: list[str] = []
@@ -126,8 +126,9 @@ def expand_queries(profile: dict, preferences: dict) -> list[str]:
     if not cleaned:
         fallback = (profile.get("recent_titles") or ["software engineer"])[0]
         cleaned = [fallback]
-    # Allow a larger pool when the user provided many seed roles.
-    cap = max(8, len(seed_roles) + 6)
+    # Allow a generous pool: seeds always survive, plus room for resume-derived
+    # and related titles. Hard ceiling guards against runaway portal fetches.
+    cap = min(20, max(15, len(seed_roles) + 12))
     return cleaned[:cap]
 
 

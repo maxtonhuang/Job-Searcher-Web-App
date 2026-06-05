@@ -189,20 +189,28 @@ The field could be anything: software, medicine, finance, design, and so on.
 The queries will be sent to job-board search boxes, one at a time.
 
 # [Constraints]
-- Infer the candidate's primary field(s) from the profile and TARGET_ROLES. Do
+- Infer the candidate's primary field(s) from the PROFILE and TARGET_ROLES. Do
   not assume technology.
-- If TARGET_ROLES is non-empty, treat every entry as a required seed query and
-  build related titles around ALL of them. If TARGET_ROLES is empty, lead with
-  the most central title for the candidate's field.
-- Produce roughly 6 short query strings (2 to 4 words each) when TARGET_ROLES
-  is empty or has one entry; when TARGET_ROLES has more than one entry, produce
-  about 4 to 6 additional related titles on top of the seeds (so the final pool
-  can exceed 10). Each must be a realistic job title or role keyword.
-- Related titles should cover adjacent roles and seniority levels for the seeds,
-  but stay genuinely relevant to this candidate. Do not drift into unrelated
-  fields.
-- Use plain job titles only: no boolean operators, quotes, slashes, or symbols.
-- De-duplicate. Do not invent skills or facts about the candidate.
+- ALWAYS mine the PROFILE for relevant job titles. The candidate's recent_titles,
+  skills, education, and summary are a primary source of queries, NOT just
+  background context. This applies even when TARGET_ROLES is non-empty: in that
+  case the resume titles supplement the seeds, they are not replaced by them.
+- If TARGET_ROLES is non-empty, every entry MUST appear in the output queries,
+  and you must add related titles around ALL of them as well as titles drawn
+  from the PROFILE.
+- If TARGET_ROLES is empty, lead with the most central title for the
+  candidate's field, then build outward.
+- Produce a generous pool of queries: aim for about 12 to 18 in total when the
+  profile is rich or TARGET_ROLES has multiple entries; at least 8 when the
+  profile is sparse and TARGET_ROLES has one or none. More is fine if every
+  query is genuinely relevant.
+- Cover adjacent roles, alternate titles for the same work (e.g. "software
+  engineer" and "software developer"), and a spread of seniority levels.
+- Stay genuinely relevant to this candidate. Do not drift into unrelated fields.
+- Use plain job titles only (2 to 4 words each): no boolean operators, quotes,
+  slashes, or symbols.
+- De-duplicate (case-insensitive). Do not invent skills or facts about the
+  candidate.
 
 # [Output Schema]
 {
