@@ -328,6 +328,15 @@ st.subheader("Ask a follow-up")
 st.caption("Try: \"only roles above 8000\", \"hide recruiters\", "
            "\"which best fit my Python experience\", \"MyCareersFuture only\".")
 
+# Show a reset button only when the chat has narrowed the list down from the
+# original ranked pool. Clicking it restores the full pool but keeps the chat
+# history so the user can see how they got here.
+if len(st.session_state.view_jobs) != len(result["jobs"]):
+    if st.button(f"Reset to all {len(result['jobs'])} results"):
+        st.session_state.view_jobs = list(result["jobs"])
+        st.session_state.shown = PAGE_SIZE
+        st.rerun()
+
 for role_, text in st.session_state.chat_history:
     with st.chat_message(role_):
         st.write(text)
