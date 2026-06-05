@@ -32,6 +32,7 @@ app can compare on one basis.
 
 import os
 import re
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
@@ -527,6 +528,50 @@ def fetch_all(
     return jobs
 
 
+# Legal-entity suffixes that vary in spelling or punctuation across listings of
+# the same employer ("Pte. Ltd." vs "Pte Ltd"). Stripped before comparing names.
+_LEGAL_SUFFIX_RE = re.compile(
+    r"\b(?:private limited|pte ltd|pte|ltd|llp|llc|inc|corp|co|company|limited)\b",
+    re.IGNORECASE,
+)
+
+
+def _norm_key_text(value: str) -> str:
+    """
+    Normalize a string for duplicate comparison: NFKC-fold unicode, turn
+    non-breaking spaces into normal spaces, collapse every run of whitespace to a
+    single space, lowercase, and trim. This catches listings that look identical
+    on screen but differ only by an invisible or non-breaking space.
+    """
+    s = unicodedata.normalize("NFKC", value or "")
+    s = s.replace("\u00a0", " ")
+    s = re.sub(r"\s+", " ", s)
+    return s.strip().lower()
+
+
+def _norm_company(value: str) -> str:
+    """
+    Company key for dedupe: drop punctuation and legal-entity suffixes so that
+    "ABC Pte. Ltd." and "ABC Pte Ltd" compare equal. A name that is only a suffix
+    (e.g. "Limited") normalizes to "", which leaves that job on id-based dedupe.
+    """
+    s = _norm_key_text(value)
+    s = re.sub(r"[^\w\s]", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    s = _LEGAL_SUFFIX_RE.sub(" ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _norm_title(value: str) -> str:
+    """
+    Title key for dedupe. Deliberately conservative: only whitespace and unicode
+    are normalized, and punctuation is kept, so "Software Engineer (Backend)" and
+    "Software Engineer (Frontend)" stay distinct and "C++ Developer" never
+    collapses onto "C Developer".
+    """
+    return _norm_key_text(value)
+
+
 def dedupe_jobs(jobs: list[dict]) -> list[dict]:
     """
     Remove duplicates: exact (source, id) repeats from overlapping queries, and the
@@ -539,8 +584,8 @@ def dedupe_jobs(jobs: list[dict]) -> list[dict]:
     out: list[dict] = []
     for j in jobs:
         key_id = (j.get("source", ""), j.get("id", ""))
-        title = (j.get("title", "") or "").strip().lower()
-        company = (j.get("company", "") or "").strip().lower()
+        title = _norm_title(j.get("title", ""))
+        company = _norm_company(j.get("company", ""))
         pair = (title, company) if title and company else None
 
         existing = by_id.get(key_id) or (by_pair.get(pair) if pair else None)
