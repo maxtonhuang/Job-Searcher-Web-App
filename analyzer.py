@@ -96,30 +96,39 @@ def extract_resume_profile(resume_text: str) -> dict:
 
 def expand_queries(profile: dict, preferences: dict) -> list[str]:
     """Infer the candidate's field and return related job-search query strings."""
+    raw_role = preferences.get("role", "") or ""
+    # Users can seed multiple roles, separated by commas, semicolons, or newlines.
+    seed_roles: list[str] = []
+    for r in re.split(r"[,;\n]+", raw_role):
+        rn = r.strip()
+        if rn and rn.lower() not in {s.lower() for s in seed_roles}:
+            seed_roles.append(rn)
+
     payload = {
         "skills": (profile.get("skills") or [])[:25],
         "recent_titles": profile.get("recent_titles", []),
         "education": profile.get("education", []),
         "summary": profile.get("summary", ""),
-        "target_role": preferences.get("role", ""),
+        "target_roles": seed_roles,
     }
     user = f"PROFILE:\n{json.dumps(payload, indent=2)}"
-    result = ask_json(QUERY_EXPANSION_PROMPT, user, temperature=0.3, max_tokens=400)
+    result = ask_json(QUERY_EXPANSION_PROMPT, user, temperature=0.3, max_tokens=600)
     raw = result.get("queries", []) if isinstance(result, dict) else []
 
     cleaned: list[str] = []
-    for q in raw:
+    # Put the user's seed roles first so the LLM cannot drop them.
+    for q in seed_roles + (raw if isinstance(raw, list) else []):
         if isinstance(q, str) and q.strip():
             qn = q.strip()
             if qn.lower() not in {c.lower() for c in cleaned}:
                 cleaned.append(qn)
 
     if not cleaned:
-        fallback = preferences.get("role") or (
-            (profile.get("recent_titles") or ["software engineer"])[0]
-        )
+        fallback = (profile.get("recent_titles") or ["software engineer"])[0]
         cleaned = [fallback]
-    return cleaned[:6]
+    # Allow a larger pool when the user provided many seed roles.
+    cap = max(8, len(seed_roles) + 6)
+    return cleaned[:cap]
 
 
 # ---------------------------------------------------------------------------

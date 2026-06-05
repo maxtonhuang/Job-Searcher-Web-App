@@ -182,8 +182,12 @@ with st.sidebar:
     with st.form("search_form"):
         resume_file = st.file_uploader("Resume PDF", type=["pdf"])
 
-        role = st.text_input("Target role / keywords",
-                             placeholder="e.g. software engineer")
+        role = st.text_input(
+            "Target role / keywords",
+            placeholder="e.g. software engineer, programmer, it support",
+            help="Enter one or more roles, separated by commas, semicolons, or new lines. "
+                 "The LLM will add related titles based on all of them and your resume.",
+        )
         c1, c2 = st.columns(2)
         salary_min = c1.number_input("Min salary (S$/mo)", min_value=0,
                                      value=0, step=500)

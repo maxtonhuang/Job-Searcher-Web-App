@@ -176,24 +176,31 @@ fences. No commentary.
 
 QUERY_EXPANSION_PROMPT = """
 # [Instruction]
-You generate a small set of job-search queries for a candidate, based on their
-resume profile. Infer the candidate's field from the profile, then produce job
-titles that would surface relevant openings on a job board.
+You generate a set of job-search queries for a candidate, based on their resume
+profile and any roles the candidate explicitly asked for. Infer the candidate's
+field from the profile, then produce job titles that would surface relevant
+openings on a job board.
 
 # [Context]
 The user message contains the candidate's PROFILE (skills, recent titles,
-education, summary) and an optional TARGET ROLE the candidate typed. The field
-could be anything: software, medicine, finance, design, and so on. The queries
-will be sent to job-board search boxes, one at a time.
+education, summary) and TARGET_ROLES, a list of role keywords the candidate
+typed. TARGET_ROLES may be empty, may contain one role, or may contain many.
+The field could be anything: software, medicine, finance, design, and so on.
+The queries will be sent to job-board search boxes, one at a time.
 
 # [Constraints]
-- Infer the candidate's primary field from the profile. Do not assume technology.
-- Produce 6 to 10 short query strings (2 to 4 words each), each a realistic job
-  title or role keyword in that field.
-- If TARGET ROLE is provided and non-empty, make it the first query, then add
-  related titles. If it is empty, lead with the most central title for the field.
-- Vary the queries to broaden coverage (adjacent roles, seniority), but keep every
-  one genuinely relevant to this candidate. Do not drift into unrelated fields.
+- Infer the candidate's primary field(s) from the profile and TARGET_ROLES. Do
+  not assume technology.
+- If TARGET_ROLES is non-empty, treat every entry as a required seed query and
+  build related titles around ALL of them. If TARGET_ROLES is empty, lead with
+  the most central title for the candidate's field.
+- Produce roughly 6 short query strings (2 to 4 words each) when TARGET_ROLES
+  is empty or has one entry; when TARGET_ROLES has more than one entry, produce
+  about 4 to 6 additional related titles on top of the seeds (so the final pool
+  can exceed 10). Each must be a realistic job title or role keyword.
+- Related titles should cover adjacent roles and seniority levels for the seeds,
+  but stay genuinely relevant to this candidate. Do not drift into unrelated
+  fields.
 - Use plain job titles only: no boolean operators, quotes, slashes, or symbols.
 - De-duplicate. Do not invent skills or facts about the candidate.
 
