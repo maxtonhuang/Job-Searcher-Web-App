@@ -23,7 +23,7 @@ from sources import (
 
 # How many jobs to pull per source. The pool is ranked once; the UI pages
 # through the ranked pool 10 at a time at no extra cost.
-DEFAULT_LIMIT_PER_SOURCE = 100
+DEFAULT_LIMIT_PER_SOURCE = 300
 
 # Jooble is a noisier aggregator and its free API rate-limits faster than MCF or
 # Adzuna, so we run a smaller subset of queries against it. The ranker still sees

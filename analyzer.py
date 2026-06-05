@@ -91,7 +91,7 @@ def _clean_years(value):
 def extract_resume_profile(resume_text: str) -> dict:
     """Turn plain resume text into a compact structured profile dict."""
     user = f"RESUME TEXT:\n\n{resume_text}"
-    return ask_json(RESUME_PROFILE_PROMPT, user, max_tokens=1500)
+    return ask_json(RESUME_PROFILE_PROMPT, user, max_tokens=30000)
 
 
 def expand_queries(profile: dict, preferences: dict) -> list[str]:
