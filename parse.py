@@ -15,7 +15,7 @@ from pypdf import PdfReader
 _MIN_RESUME_CHARS = 200
 
 # Rough token estimate: 1 token is about 4 chars. Truncate above ~6000 tokens.
-_MAX_RESUME_CHARS = 6000 * 4
+_MAX_RESUME_CHARS = 10000 * 4
 
 
 def read_resume_pdf(path: str) -> str:
