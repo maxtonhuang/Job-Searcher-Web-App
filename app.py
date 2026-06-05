@@ -22,26 +22,6 @@ EMP_FILTER_OPTIONS = ["Full Time", "Part Time", "Contract", "Internship", "Other
 st.set_page_config(page_title="SG Job Matcher", layout="wide")
 st.title("Singapore Job Matcher")
 
-# Float the chat history pane just above the chat input, both pinned to the
-# bottom of the viewport. The padding on the main block keeps the last result
-# card from hiding behind the floating pane.
-st.markdown("""
-<style>
-.st-key-chat_pane {
-    position: fixed;
-    bottom: 90px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(900px, calc(100% - 2rem));
-    z-index: 998;
-    background: var(--background-color);
-    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
-}
-[data-testid="stMainBlockContainer"] {
-    padding-bottom: 420px;
-}
-</style>
-""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Session state
@@ -368,13 +348,10 @@ if len(st.session_state.view_jobs) != len(result["jobs"]):
         st.session_state.shown = PAGE_SIZE
         st.rerun()
 
-with st.container(border=True, height=260, key="chat_pane"):
-    if st.session_state.chat_history:
-        for role_, text in st.session_state.chat_history:
-            with st.chat_message(role_):
-                st.write(text)
-    else:
-        st.caption("Your chat with the assistant will appear here.")
+with st.container(border=True, height=260):
+    for role_, text in st.session_state.chat_history:
+        with st.chat_message(role_):
+            st.write(text)
 
 question = st.chat_input("Refine or ask about these jobs")
 if question:
