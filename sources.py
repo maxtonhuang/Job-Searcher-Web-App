@@ -530,21 +530,29 @@ def fetch_all(
 def dedupe_jobs(jobs: list[dict]) -> list[dict]:
     """
     Remove duplicates: exact (source, id) repeats from overlapping queries, and the
-    same role appearing across sources (same title + same company).
+    same role appearing across sources (same title + same company). When a job is
+    surfaced by more than one query, the duplicates are dropped but every query
+    that found it is merged into the kept copy's "matched_queries" list.
     """
-    seen_ids: set = set()
-    seen_pairs: set = set()
+    by_id: dict = {}     # (source, id) -> kept job
+    by_pair: dict = {}   # (title, company) -> kept job
     out: list[dict] = []
     for j in jobs:
         key_id = (j.get("source", ""), j.get("id", ""))
         title = (j.get("title", "") or "").strip().lower()
         company = (j.get("company", "") or "").strip().lower()
-        if key_id in seen_ids:
+        pair = (title, company) if title and company else None
+
+        existing = by_id.get(key_id) or (by_pair.get(pair) if pair else None)
+        if existing is not None:
+            existing_qs = existing.setdefault("matched_queries", [])
+            for q in j.get("matched_queries") or []:
+                if q not in existing_qs:
+                    existing_qs.append(q)
             continue
-        if title and company and (title, company) in seen_pairs:
-            continue
-        seen_ids.add(key_id)
-        if title and company:
-            seen_pairs.add((title, company))
+
+        by_id[key_id] = j
+        if pair:
+            by_pair[pair] = j
         out.append(j)
     return out

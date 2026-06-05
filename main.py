@@ -67,25 +67,35 @@ def run_search(
     jsearch_jobs: list[dict] = []
     jooble_jobs: list[dict] = []
 
+    def _tag(batch: list[dict], query: str) -> list[dict]:
+        """Remember which query surfaced each job, so dedupe can merge them."""
+        for job in batch:
+            job["matched_queries"] = [query]
+        return batch
+
     if SOURCE_MCF in sources:
         for q in queries:
-            mcf_jobs += fetch_mcf(q, limit=PER_QUERY_LIMIT)
+            mcf_jobs += _tag(fetch_mcf(q, limit=PER_QUERY_LIMIT), q)
         mcf_jobs = dedupe_jobs(mcf_jobs)[:limit_per_source]
 
     if SOURCE_ADZUNA in sources:
         for q in queries:
-            adzuna_jobs += fetch_adzuna(
-                q, results_per_page=PER_QUERY_LIMIT, salary_min_monthly=salary_min
+            adzuna_jobs += _tag(
+                fetch_adzuna(q, results_per_page=PER_QUERY_LIMIT,
+                             salary_min_monthly=salary_min),
+                q,
             )
         adzuna_jobs = dedupe_jobs(adzuna_jobs)[:limit_per_source]
 
     if SOURCE_JSEARCH in sources:
         # Single query only: each JSearch call spends your 200/month quota.
-        jsearch_jobs = dedupe_jobs(fetch_jsearch(primary, num_results=limit_per_source))
+        jsearch_jobs = dedupe_jobs(
+            _tag(fetch_jsearch(primary, num_results=limit_per_source), primary)
+        )
 
     if SOURCE_JOOBLE in sources:
         for q in queries[:JOOBLE_MAX_QUERIES]:
-            jooble_jobs += fetch_jooble(q, num_results=PER_QUERY_LIMIT)
+            jooble_jobs += _tag(fetch_jooble(q, num_results=PER_QUERY_LIMIT), q)
         jooble_jobs = dedupe_jobs(jooble_jobs)[:limit_per_source]
 
     jobs = dedupe_jobs(mcf_jobs + adzuna_jobs + jsearch_jobs + jooble_jobs)

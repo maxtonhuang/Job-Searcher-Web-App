@@ -266,7 +266,7 @@ def answer_followup(profile: dict, jobs: list[dict], question: str) -> dict:
         f"CURRENT JOBS:\n{json.dumps(compact, indent=2)}\n\n"
         f"USER QUESTION:\n{question}"
     )
-    result = ask_json(CHAT_FOLLOWUP_PROMPT, user, temperature=0.2, max_tokens=5000)
+    result = ask_json(CHAT_FOLLOWUP_PROMPT, user, temperature=0.2, max_tokens=20000)
     if not isinstance(result, dict):
         return {"answer": "Sorry, I could not process that.", "job_ids": None}
 
